@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ascendant 2026 — Repo Tracker Dashboard</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #000000;
+    --bg-panel: #0c0c0c;
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --text-primary: #f2f2f2;
+    --text-muted: #9a9a9a;
+    --ctf: #16c794;
+    --ctf-rgb: 22, 199, 148;
+    --danger: #ff5f57;
+    --font-display: 'Anton', 'Arial Narrow', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    --radius: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { min-height: 100vh; background: var(--bg-void); color: var(--text-primary); font-family: var(--font-mono); padding: 32px; }
+  h1 { font-family: var(--font-display); color: var(--ctf); font-size: 28px; margin-bottom: 4px; }
+  .meta { color: var(--text-muted); font-size: 12px; margin-bottom: 20px; }
+  #refresh-btn {
+    background: var(--ctf); border: none; border-radius: var(--radius); color: #001510;
+    font-family: var(--font-mono); font-weight: 700; font-size: 13px; padding: 10px 18px; cursor: pointer; margin-bottom: 20px;
+  }
+  #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); }
+  th { color: var(--text-muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+  tr.flagged { background: rgba(255, 95, 87, 0.08); }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+  .chip-pre { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+  .chip-post { background: rgba(var(--ctf-rgb), 0.16); color: var(--ctf); }
+  .chip-flag { background: rgba(255,95,87,0.16); color: var(--danger); font-weight: 700; }
+  .row-error { color: var(--danger); font-style: italic; }
+  a { color: var(--ctf); }
+  #status { margin-bottom: 12px; font-size: 13px; min-height: 18px; }
+  #status.error { color: var(--danger); }
+</style>
+</head>
+<body>
+<div id="gate">
+  <h1>REPO TRACKER</h1>
+  <p class="meta">Enter the dashboard secret to continue.</p>
+  <input id="secret-input" type="password" placeholder="secret" style="background:var(--bg-panel); border:1px solid var(--border-subtle); border-radius:var(--radius); color:var(--text-primary); font-family:var(--font-mono); padding:10px 12px; margin-right:8px;">
+  <button id="unlock-btn" style="background:var(--ctf); border:none; border-radius:var(--radius); color:#001510; font-family:var(--font-mono); font-weight:700; padding:10px 16px; cursor:pointer;">UNLOCK</button>
+  <div id="gate-status" style="margin-top:12px; color:var(--danger); font-size:13px;"></div>
+</div>
+
+<div id="board" style="display:none;">
+  <h1>REPO TRACKER</h1>
+  <p class="meta" id="release-meta"></p>
+  <button id="refresh-btn">↻ REFRESH</button>
+  <div id="status"></div>
+  <table>
+    <thead>
+      <tr>
+        <th>Team</th>
+        <th>Members</th>
+        <th>Repo</th>
+        <th>Total</th>
+        <th>Before / After</th>
+        <th>Contributors</th>
+        <th>Last commit</th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+</div>
+
+<script>
+  var ENDPOINT = 'PASTE_APPS_SCRIPT_WEB_APP_URL_HERE';
+  var secret = sessionStorage.getItem('repoTrackerSecret') || '';
+
+  var gateEl = document.getElementById('gate');
+  var boardEl = document.getElementById('board');
+  var statusEl = document.getElementById('status');
+  var tableBody = document.getElementById('table-body');
+  var releaseMetaEl = document.getElementById('release-meta');
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function renderTeams(teams) {
+    tableBody.innerHTML = '';
+    teams.forEach(function (t) {
+      var tr = document.createElement('tr');
+      if (t.status === 'error') {
+        tr.innerHTML =
+          '<td>' + escapeHtml(t.team) + '</td>' +
+          '<td>' + escapeHtml(t.members) + '</td>' +
+          '<td><a href="' + escapeHtml(t.repoUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t.repoUrl) + '</a></td>' +
+          '<td class="row-error" colspan="4">' + escapeHtml(t.message) + '</td>';
+      } else {
+        if (t.postRelease === 0) tr.className = 'flagged';
+        tr.innerHTML =
+          '<td>' + escapeHtml(t.team) + '</td>' +
+          '<td>' + escapeHtml(t.members) + '</td>' +
+          '<td><a href="' + escapeHtml(t.repoUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t.repoUrl) + '</a></td>' +
+          '<td>' + t.totalCommits + '</td>' +
+          '<td><span class="chip chip-pre">' + t.preRelease + ' before</span> ' +
+            '<span class="chip ' + (t.postRelease === 0 ? 'chip-flag' : 'chip-post') + '">' + t.postRelease + ' after</span></td>' +
+          '<td>' + t.contributorCount + '</td>' +
+          '<td>' + (t.lastCommitTime ? new Date(t.lastCommitTime).toLocaleString() : '—') + '</td>';
+      }
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function loadDashboard() {
+    statusEl.textContent = 'Loading...';
+    statusEl.className = '';
+    var url = ENDPOINT + '?action=dashboard&secret=' + encodeURIComponent(secret);
+    fetch(url)
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.status !== 'success') {
+          statusEl.textContent = data.message || 'Failed to load.';
+          statusEl.className = 'error';
+          return;
+        }
+        statusEl.textContent = '';
+        releaseMetaEl.textContent = data.releaseTimestamp
+          ? 'Problem statement released: ' + new Date(data.releaseTimestamp).toLocaleString()
+          : 'Problem statement not yet released — every commit currently counts as "before".';
+        renderTeams(data.teams);
+      })
+      .catch(function () {
+        statusEl.textContent = 'Network error — try again.';
+        statusEl.className = 'error';
+      });
+  }
+
+  document.getElementById('unlock-btn').addEventListener('click', function () {
+    secret = document.getElementById('secret-input').value;
+    sessionStorage.setItem('repoTrackerSecret', secret);
+    gateEl.style.display = 'none';
+    boardEl.style.display = 'block';
+    loadDashboard();
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
+
+  if (secret) {
+    gateEl.style.display = 'none';
+    boardEl.style.display = 'block';
+    loadDashboard();
+  }
+</script>
+</body>
+</html>

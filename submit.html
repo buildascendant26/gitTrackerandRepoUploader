@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ascendant 2026 — Repo Submission</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #000000;
+    --bg-panel: #0c0c0c;
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --text-primary: #f2f2f2;
+    --text-muted: #9a9a9a;
+    --ctf: #16c794;
+    --ctf-rgb: 22, 199, 148;
+    --font-display: 'Anton', 'Arial Narrow', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    --radius: 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 32px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    color: var(--ctf);
+    margin-bottom: 8px;
+  }
+  p.lede { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
+  label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; margin-top: 18px; text-transform: uppercase; letter-spacing: 0.04em; }
+  input {
+    width: 100%;
+    background: var(--bg-void);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+  input:focus { outline: none; border-color: var(--ctf); }
+  button {
+    width: 100%;
+    margin-top: 24px;
+    background: var(--ctf);
+    border: none;
+    border-radius: var(--radius);
+    color: #001510;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+    padding: 12px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status { margin-top: 16px; font-size: 13px; min-height: 18px; }
+  #status.error { color: #ff8a80; }
+  #status.success { color: var(--ctf); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>REPO SUBMISSION</h1>
+  <p class="lede">Submit your team's GitHub repo once. One submission per team — there's no edit after this, so double-check the URL.</p>
+  <form id="submit-form">
+    <label for="team">Team name</label>
+    <input id="team" name="team" type="text" required autocomplete="off">
+
+    <label for="members">Member names (comma separated)</label>
+    <input id="members" name="members" type="text" required autocomplete="off" placeholder="Ann, Ben, Cara">
+
+    <label for="repoUrl">GitHub repo URL</label>
+    <input id="repoUrl" name="repoUrl" type="url" required autocomplete="off" placeholder="https://github.com/your-team/your-repo">
+
+    <button type="submit" id="submit-btn">SUBMIT</button>
+    <div id="status"></div>
+  </form>
+</div>
+<script>
+  var ENDPOINT = 'PASTE_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+  var form = document.getElementById('submit-form');
+  var statusEl = document.getElementById('status');
+  var submitBtn = document.getElementById('submit-btn');
+
+  form.addEventListener('submit', function (evt) {
+    evt.preventDefault();
+    statusEl.textContent = '';
+    statusEl.className = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'SUBMITTING...';
+
+    var payload = {
+      team: document.getElementById('team').value.trim(),
+      members: document.getElementById('members').value.trim(),
+      repoUrl: document.getElementById('repoUrl').value.trim()
+    };
+
+    fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'SUBMIT';
+        if (data.status === 'success') {
+          statusEl.textContent = 'Submitted. Good luck.';
+          statusEl.className = 'success';
+          form.reset();
+        } else {
+          statusEl.textContent = data.message || 'Submission failed.';
+          statusEl.className = 'error';
+        }
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'SUBMIT';
+        statusEl.textContent = 'Network error — try again.';
+        statusEl.className = 'error';
+      });
+  });
+</script>
+</body>
+</html>
