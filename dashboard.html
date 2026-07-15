@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg-void: #000000;
@@ -19,11 +19,43 @@
     --ctf-rgb: 22, 199, 148;
     --danger: #ff5f57;
     --font-display: 'Anton', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Courier New', monospace;
     --radius: 4px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { min-height: 100vh; background: var(--bg-void); color: var(--text-primary); font-family: var(--font-mono); padding: 32px; }
+  body {
+    position: relative;
+    min-height: 100vh;
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    padding: 32px;
+    overflow-x: hidden;
+  }
+  .matrix-canvas {
+    position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+    z-index: 0; pointer-events: none;
+  }
+  .bg-vignette {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, transparent 0%, #000 85%);
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.015) 2px,
+      rgba(255, 255, 255, 0.015) 4px
+    );
+  }
+  #gate, #board { position: relative; z-index: 2; }
   h1 { font-family: var(--font-display); color: var(--ctf); font-size: 28px; margin-bottom: 4px; }
   .meta { color: var(--text-muted); font-size: 12px; margin-bottom: 20px; }
   #refresh-btn {
@@ -33,7 +65,7 @@
   #refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); }
-  th { color: var(--text-muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+  th { color: var(--text-muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; font-family: var(--font-mono); }
   tr.flagged { background: rgba(255, 95, 87, 0.08); }
   .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
   .chip-pre { background: rgba(255,255,255,0.08); color: var(--text-muted); }
@@ -46,6 +78,8 @@
 </style>
 </head>
 <body>
+<canvas id="matrix" class="matrix-canvas" aria-hidden="true"></canvas>
+<div class="bg-vignette" aria-hidden="true"></div>
 <div id="gate">
   <h1>REPO TRACKER</h1>
   <p class="meta">Enter the dashboard secret to continue.</p>
@@ -157,5 +191,6 @@
     loadDashboard();
   }
 </script>
+<script src="matrix-bg.js"></script>
 </body>
 </html>

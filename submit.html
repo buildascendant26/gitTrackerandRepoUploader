@@ -7,7 +7,7 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg-void: #000000;
@@ -18,21 +18,48 @@
     --ctf: #16c794;
     --ctf-rgb: 22, 199, 148;
     --font-display: 'Anton', 'Arial Narrow', sans-serif;
+    --font-body: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Courier New', monospace;
     --radius: 4px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
+    position: relative;
     min-height: 100vh;
     background: var(--bg-void);
     color: var(--text-primary);
-    font-family: var(--font-mono);
+    font-family: var(--font-body);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
+    overflow-x: hidden;
+  }
+  .matrix-canvas {
+    position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
+    z-index: 0; pointer-events: none;
+  }
+  .bg-vignette {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, transparent 0%, #000 85%);
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.015) 2px,
+      rgba(255, 255, 255, 0.015) 4px
+    );
   }
   .card {
+    position: relative;
+    z-index: 2;
     width: 100%;
     max-width: 480px;
     background: var(--bg-panel);
@@ -80,6 +107,8 @@
 </style>
 </head>
 <body>
+<canvas id="matrix" class="matrix-canvas" aria-hidden="true"></canvas>
+<div class="bg-vignette" aria-hidden="true"></div>
 <div class="card">
   <h1>REPO SUBMISSION</h1>
   <p class="lede">Submit your team's GitHub repo once. One submission per team — there's no edit after this, so double-check the URL.</p>
@@ -143,5 +172,6 @@
       });
   });
 </script>
+<script src="matrix-bg.js"></script>
 </body>
 </html>
