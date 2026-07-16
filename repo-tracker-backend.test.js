@@ -270,6 +270,56 @@ test('doPost rejects a duplicate team name across two calls', () => {
   assert.equal(sheets['Submissions']._rows.length, 2); // still just header + first submission
 });
 
+test('doPost rejects a release action with a wrong or missing secret', () => {
+  const sheets = {};
+  const ctx = loadBackend({
+    SpreadsheetApp: createMockSpreadsheetApp(sheets),
+    PropertiesService: createMockPropertiesService({ DASHBOARD_SECRET: 'right' }),
+    ContentService: mockContentService
+  });
+  const result = ctx.doPost({
+    postData: { contents: JSON.stringify({ action: 'release', secret: 'wrong' }) }
+  });
+  assert.equal(result._json.status, 'error');
+  assert.equal(result._json.message, 'unauthorized');
+  assert.equal(sheets['Config'], undefined);
+});
+
+test('doPost release action stamps Config!B1 with the current time and returns it', () => {
+  const sheets = {};
+  const ctx = loadBackend({
+    SpreadsheetApp: createMockSpreadsheetApp(sheets),
+    PropertiesService: createMockPropertiesService({ DASHBOARD_SECRET: 'right' }),
+    ContentService: mockContentService
+  });
+  const before = Date.now();
+  const result = ctx.doPost({
+    postData: { contents: JSON.stringify({ action: 'release', secret: 'right' }) }
+  });
+  const after = Date.now();
+  assert.equal(result._json.status, 'success');
+  const stamped = new Date(result._json.releaseTimestamp).getTime();
+  assert.ok(stamped >= before && stamped <= after);
+  assert.equal(sheets['Config']._rows.length, 0); // no data rows appended, just the B1 cell
+});
+
+test('doGet reflects the release timestamp set by a prior release action', () => {
+  const sheets = {
+    Submissions: createMockSheet([['Timestamp', 'Team', 'Members', 'RepoURL']])
+  };
+  const ctx = loadBackend({
+    SpreadsheetApp: createMockSpreadsheetApp(sheets),
+    PropertiesService: createMockPropertiesService({ DASHBOARD_SECRET: 'right', GITHUB_TOKEN: 'tok' }),
+    ContentService: mockContentService,
+    UrlFetchApp: createMockUrlFetchApp({})
+  });
+  const release = ctx.doPost({
+    postData: { contents: JSON.stringify({ action: 'release', secret: 'right' }) }
+  });
+  const result = ctx.doGet({ parameter: { action: 'dashboard', secret: 'right' } });
+  assert.equal(result._json.releaseTimestamp, release._json.releaseTimestamp);
+});
+
 // ---- doGet ----
 
 function createMockPropertiesService(props) {

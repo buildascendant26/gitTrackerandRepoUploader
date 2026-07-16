@@ -122,6 +122,9 @@ function doPost(e) {
   } catch (err) {
     return jsonOutput({ status: 'error', message: 'invalid JSON body' });
   }
+  if (data && data.action === 'release') {
+    return handleReleaseAction(data);
+  }
   var existingTeamNames = getSubmissionsRows().map(function (row) { return row[1]; });
   var validation = validateSubmission(data, existingTeamNames);
   if (!validation.ok) {
@@ -133,6 +136,32 @@ function doPost(e) {
 }
 
 /* ─── GAS GLUE: config + GitHub fetch + doGet ─── */
+
+function getOrCreateConfigSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CONFIG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG_SHEET_NAME);
+  }
+  return sheet;
+}
+
+function setReleaseTimestampIso(iso) {
+  getOrCreateConfigSheet().getRange('B1').setValue(iso);
+}
+
+// Dashboard-secret-gated: stamps Config!B1 with the current time so every
+// commit from this moment on counts as post-release ("current") instead of
+// pre-release ("past"). See splitCommitsByRelease.
+function handleReleaseAction(data) {
+  var secret = PropertiesService.getScriptProperties().getProperty('DASHBOARD_SECRET');
+  if (!secret || data.secret !== secret) {
+    return jsonOutput({ status: 'error', message: 'unauthorized' });
+  }
+  var iso = new Date().toISOString();
+  setReleaseTimestampIso(iso);
+  return jsonOutput({ status: 'success', releaseTimestamp: iso });
+}
 
 function getReleaseTimestampIso() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
