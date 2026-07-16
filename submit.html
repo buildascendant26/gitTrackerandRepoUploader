@@ -7,22 +7,30 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg-void: #000000;
-    --bg-panel: #0c0c0c;
+    --bg-panel: rgba(13, 13, 13, 0.72);
+    --bg-field: rgba(0, 0, 0, 0.55);
     --border-subtle: rgba(255, 255, 255, 0.09);
-    --text-primary: #f2f2f2;
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text-primary: #f4f4f4;
     --text-muted: #9a9a9a;
+    --text-dim: #6a6a6a;
     --ctf: #16c794;
+    --ctf-bright: #2effb8;
     --ctf-rgb: 22, 199, 148;
+    --warn: #ffb020;
+    --danger: #ff5f57;
     --font-display: 'Anton', 'Arial Narrow', sans-serif;
     --font-body: 'Inter', system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', 'Courier New', monospace;
-    --radius: 4px;
+    --radius: 10px;
+    --radius-sm: 7px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     position: relative;
     min-height: 100vh;
@@ -32,118 +40,335 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 28px 20px;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
   }
   .matrix-canvas {
     position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
-    z-index: 0; pointer-events: none;
+    z-index: 0; pointer-events: none; opacity: 0.7;
   }
   .bg-vignette {
     position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background: radial-gradient(ellipse 80% 60% at 50% 0%, transparent 0%, #000 85%);
+    background: radial-gradient(ellipse 75% 55% at 50% 40%, transparent 0%, #000 82%);
   }
   body::after {
     content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(255, 255, 255, 0.015) 2px,
-      rgba(255, 255, 255, 0.015) 4px
-    );
+    position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background: repeating-linear-gradient(0deg,
+      transparent, transparent 2px,
+      rgba(255, 255, 255, 0.014) 2px, rgba(255, 255, 255, 0.014) 4px);
   }
+
+  /* ── card ─────────────────────────────────────────── */
   .card {
     position: relative;
     z-index: 2;
     width: 100%;
-    max-width: 480px;
+    max-width: 460px;
     background: var(--bg-panel);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
-    padding: 32px;
+    padding: 34px 32px 26px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 30px 80px -20px rgba(0, 0, 0, 0.9),
+      0 0 60px -30px rgba(var(--ctf-rgb), 0.4);
+    overflow: hidden;
   }
+  /* accent hairline along the top edge */
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(var(--ctf-rgb), 0.9), transparent);
+  }
+
+  /* ── header ───────────────────────────────────────── */
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted);
+    margin-bottom: 18px;
+    padding: 5px 10px 5px 8px;
+    border: 1px solid var(--border-subtle); border-radius: 999px;
+    background: rgba(var(--ctf-rgb), 0.04);
+  }
+  .eyebrow .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--ctf);
+    box-shadow: 0 0 8px 1px rgba(var(--ctf-rgb), 0.8);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
   h1 {
     font-family: var(--font-display);
-    font-size: 28px;
-    letter-spacing: 0.02em;
-    color: var(--ctf);
+    font-size: clamp(32px, 8vw, 44px);
+    line-height: 0.94;
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+  h1 .accent { color: var(--ctf); }
+  p.lede { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; max-width: 42ch; }
+
+  /* ── notice callout ───────────────────────────────── */
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin: 22px 0 6px;
+    padding: 11px 13px;
+    border: 1px solid rgba(255, 176, 32, 0.28);
+    background: rgba(255, 176, 32, 0.06);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px; line-height: 1.5; color: #e8d4a8;
+  }
+  .notice svg { flex: none; margin-top: 1px; color: var(--warn); }
+
+  /* ── form fields ──────────────────────────────────── */
+  .field { margin-top: 20px; }
+  .field label {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
     margin-bottom: 8px;
   }
-  p.lede { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
-  label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; margin-top: 18px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field label .req { color: var(--ctf); }
+  .field label .hint { text-transform: none; letter-spacing: 0; font-size: 11px; }
+  .field label .hint.ok { color: var(--ctf-bright); }
+  .field label .hint.bad { color: var(--danger); }
+
+  .input-wrap { position: relative; display: flex; align-items: center; }
+  .input-wrap > .lead {
+    position: absolute; left: 12px; display: flex; color: var(--text-dim);
+    pointer-events: none; transition: color 0.15s;
+  }
   input {
     width: 100%;
-    background: var(--bg-void);
+    background: var(--bg-field);
     border: 1px solid var(--border-subtle);
-    border-radius: var(--radius);
+    border-radius: var(--radius-sm);
     color: var(--text-primary);
     font-family: var(--font-mono);
     font-size: 14px;
-    padding: 10px 12px;
+    padding: 12px 12px 12px 40px;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   }
-  input:focus { outline: none; border-color: var(--ctf); }
-  button {
+  input::placeholder { color: var(--text-dim); }
+  input:hover { border-color: var(--border-strong); }
+  input:focus {
+    outline: none;
+    border-color: var(--ctf);
+    background: rgba(var(--ctf-rgb), 0.04);
+    box-shadow: 0 0 0 3px rgba(var(--ctf-rgb), 0.14);
+  }
+  .input-wrap:focus-within > .lead { color: var(--ctf); }
+  .input-wrap.valid input { border-color: rgba(var(--ctf-rgb), 0.55); }
+  .input-wrap.valid > .lead { color: var(--ctf); }
+
+  /* ── submit button ────────────────────────────────── */
+  button.submit {
     width: 100%;
-    margin-top: 24px;
-    background: var(--ctf);
+    margin-top: 26px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    background: linear-gradient(180deg, var(--ctf-bright), var(--ctf));
     border: none;
-    border-radius: var(--radius);
-    color: #001510;
-    font-family: var(--font-mono);
-    font-weight: 700;
-    font-size: 14px;
-    padding: 12px;
+    border-radius: var(--radius-sm);
+    color: #002317;
+    font-family: var(--font-mono); font-weight: 700; font-size: 13.5px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 14px;
     cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.15s;
+    box-shadow: 0 8px 22px -8px rgba(var(--ctf-rgb), 0.6);
   }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #status { margin-top: 16px; font-size: 13px; min-height: 18px; }
+  button.submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px -8px rgba(var(--ctf-rgb), 0.75); filter: brightness(1.05); }
+  button.submit:active:not(:disabled) { transform: translateY(0); }
+  button.submit:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+  button.submit .arrow { transition: transform 0.15s; }
+  button.submit:hover:not(:disabled) .arrow { transform: translateX(3px); }
+  .spinner {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid rgba(0,0,0,0.25); border-top-color: #002317;
+    animation: spin 0.6s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── status line ──────────────────────────────────── */
+  #status { margin-top: 15px; font-size: 12.5px; min-height: 18px; font-family: var(--font-mono); }
   #status.error { color: #ff8a80; }
-  #status.success { color: var(--ctf); }
+  #status.error::before { content: '✕ '; }
+
+  /* ── footer ───────────────────────────────────────── */
+  .card-foot {
+    margin-top: 22px; padding-top: 16px;
+    border-top: 1px solid var(--border-subtle);
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim);
+    letter-spacing: 0.04em;
+    display: flex; justify-content: space-between; gap: 12px;
+  }
+
+  /* ── success state ────────────────────────────────── */
+  #success { display: none; text-align: center; padding: 8px 4px 4px; }
+  #success.show { display: block; animation: rise 0.4s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .check-ring {
+    width: 64px; height: 64px; margin: 4px auto 18px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(var(--ctf-rgb), 0.12);
+    border: 1px solid rgba(var(--ctf-rgb), 0.4);
+    box-shadow: 0 0 30px -6px rgba(var(--ctf-rgb), 0.5);
+  }
+  .check-ring svg { color: var(--ctf-bright); }
+  #success h2 { font-family: var(--font-display); font-size: 30px; margin-bottom: 8px; }
+  #success p { color: var(--text-muted); font-size: 13.5px; line-height: 1.6; margin-bottom: 20px; }
+  .receipt {
+    text-align: left; font-family: var(--font-mono); font-size: 12px;
+    background: var(--bg-field); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 8px;
+  }
+  .receipt .row { display: flex; gap: 12px; padding: 5px 0; }
+  .receipt .row + .row { border-top: 1px solid var(--border-subtle); }
+  .receipt .k { color: var(--text-dim); min-width: 74px; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.06em; padding-top: 1px; }
+  .receipt .v { color: var(--text-primary); word-break: break-all; }
+  .receipt .v a { color: var(--ctf); text-decoration: none; }
+  .receipt .v a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <canvas id="matrix" class="matrix-canvas" aria-hidden="true"></canvas>
 <div class="bg-vignette" aria-hidden="true"></div>
-<div class="card">
-  <h1>REPO SUBMISSION</h1>
-  <p class="lede">Submit your team's GitHub repo once. One submission per team — there's no edit after this, so double-check the URL.</p>
-  <form id="submit-form">
-    <label for="team">Team name</label>
-    <input id="team" name="team" type="text" required autocomplete="off">
 
-    <label for="members">Member names (comma separated)</label>
-    <input id="members" name="members" type="text" required autocomplete="off" placeholder="Ann, Ben, Cara">
+<main class="card">
+  <!-- form view -->
+  <div id="form-view">
+    <span class="eyebrow"><span class="dot"></span> Ascendant 2026 · Build Phase</span>
+    <h1>Repo <span class="accent">Submission</span></h1>
+    <p class="lede">Register your team's GitHub repository. Once the problem statement drops, every commit you push is tracked live.</p>
 
-    <label for="repoUrl">GitHub repo URL</label>
-    <input id="repoUrl" name="repoUrl" type="url" required autocomplete="off" placeholder="https://github.com/your-team/your-repo">
+    <div class="notice">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span><strong>One submission per team.</strong> There's no edit afterward — double-check the repo URL before you send.</span>
+    </div>
 
-    <button type="submit" id="submit-btn">SUBMIT</button>
-    <div id="status"></div>
-  </form>
-</div>
+    <form id="submit-form" autocomplete="off" novalidate>
+      <div class="field">
+        <label for="team">Team name <span class="req">*</span></label>
+        <div class="input-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></span>
+          <input id="team" name="team" type="text" required placeholder="e.g. Null Pointer Exception">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="members">Members <span class="req">*</span> <span class="hint">comma separated</span></label>
+        <div class="input-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+          <input id="members" name="members" type="text" required placeholder="Ramu, Shlok, Adi">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="repoUrl">GitHub repo URL <span class="req">*</span> <span class="hint" id="repo-hint"></span></label>
+        <div class="input-wrap" id="repo-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+          <input id="repoUrl" name="repoUrl" type="url" required placeholder="https://github.com/team/repo">
+        </div>
+      </div>
+
+      <button type="submit" id="submit-btn" class="submit">
+        <span id="btn-label">Submit Repository</span>
+        <span class="arrow" id="btn-arrow">→</span>
+      </button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </form>
+
+    <div class="card-foot">
+      <span>// ascendant.tracker</span>
+      <span>secure · one-shot</span>
+    </div>
+  </div>
+
+  <!-- success view -->
+  <div id="success" aria-live="polite">
+    <div class="check-ring">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2>You're in.</h2>
+    <p>Your repository is registered and now being tracked. Keep committing — good luck.</p>
+    <div class="receipt">
+      <div class="row"><span class="k">Team</span><span class="v" id="r-team"></span></div>
+      <div class="row"><span class="k">Members</span><span class="v" id="r-members"></span></div>
+      <div class="row"><span class="k">Repo</span><span class="v" id="r-repo"></span></div>
+    </div>
+    <div class="card-foot"><span>// submission recorded</span><span id="r-time"></span></div>
+  </div>
+</main>
+
 <script>
   var ENDPOINT = 'https://script.google.com/macros/s/AKfycbyVGTtaReZcoPd8qbTa8aHtEPPMbHVZtNS7QIgAGH_pBvq0gynDr9hWdy5ejMDvTVUs/exec';
 
   var form = document.getElementById('submit-form');
   var statusEl = document.getElementById('status');
   var submitBtn = document.getElementById('submit-btn');
+  var btnLabel = document.getElementById('btn-label');
+  var btnArrow = document.getElementById('btn-arrow');
+  var repoInput = document.getElementById('repoUrl');
+  var repoWrap = document.getElementById('repo-wrap');
+  var repoHint = document.getElementById('repo-hint');
+
+  // mirrors parseRepoUrl() in the backend so the field can validate live
+  var REPO_RE = /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/;
+
+  repoInput.addEventListener('input', function () {
+    var v = repoInput.value.trim();
+    var m = v.match(REPO_RE);
+    if (!v) {
+      repoWrap.classList.remove('valid');
+      repoHint.textContent = ''; repoHint.className = 'hint';
+    } else if (m) {
+      repoWrap.classList.add('valid');
+      repoHint.textContent = '✓ ' + m[1] + '/' + m[2]; repoHint.className = 'hint ok';
+    } else {
+      repoWrap.classList.remove('valid');
+      repoHint.textContent = 'not a github.com/owner/repo url'; repoHint.className = 'hint bad';
+    }
+  });
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+    btnArrow.style.display = on ? 'none' : '';
+    if (on) {
+      btnLabel.innerHTML = '<span class="spinner"></span> Submitting';
+    } else {
+      btnLabel.textContent = 'Submit Repository';
+    }
+  }
+
+  function showSuccess(payload) {
+    document.getElementById('r-team').textContent = payload.team;
+    document.getElementById('r-members').textContent = payload.members;
+    var repoCell = document.getElementById('r-repo');
+    repoCell.innerHTML = '';
+    var a = document.createElement('a');
+    a.href = payload.repoUrl; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = payload.repoUrl;
+    repoCell.appendChild(a);
+    document.getElementById('r-time').textContent = new Date().toLocaleString();
+    document.getElementById('form-view').style.display = 'none';
+    document.getElementById('success').classList.add('show');
+  }
 
   form.addEventListener('submit', function (evt) {
     evt.preventDefault();
     statusEl.textContent = '';
     statusEl.className = '';
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'SUBMITTING...';
+    setLoading(true);
 
     var payload = {
       team: document.getElementById('team').value.trim(),
       members: document.getElementById('members').value.trim(),
-      repoUrl: document.getElementById('repoUrl').value.trim()
+      repoUrl: repoInput.value.trim()
     };
 
     fetch(ENDPOINT, {
@@ -153,20 +378,16 @@
     })
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'SUBMIT';
         if (data.status === 'success') {
-          statusEl.textContent = 'Submitted. Good luck.';
-          statusEl.className = 'success';
-          form.reset();
+          showSuccess(payload);
         } else {
+          setLoading(false);
           statusEl.textContent = data.message || 'Submission failed.';
           statusEl.className = 'error';
         }
       })
       .catch(function () {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'SUBMIT';
+        setLoading(false);
         statusEl.textContent = 'Network error — try again.';
         statusEl.className = 'error';
       });
