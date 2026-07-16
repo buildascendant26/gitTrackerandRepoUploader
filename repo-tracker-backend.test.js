@@ -92,10 +92,20 @@ test('normalizeGithubCommit prefers the github login over commit author fields',
   const ctx = loadBackend();
   const normalized = ctx.normalizeGithubCommit({
     sha: 'abc123',
-    commit: { author: { name: 'Ann Dev', email: 'ann@example.com', date: '2026-07-10T10:00:00Z' } },
+    commit: { author: { name: 'Ann Dev', email: 'ann@example.com', date: '2026-07-10T10:00:00Z' }, message: 'feat: add login' },
     author: { login: 'ann-dev' }
   });
-  assert.deepEqual(plain(normalized), { sha: 'abc123', date: '2026-07-10T10:00:00Z', author: 'ann-dev' });
+  assert.deepEqual(plain(normalized), { sha: 'abc123', date: '2026-07-10T10:00:00Z', author: 'ann-dev', message: 'feat: add login' });
+});
+
+test('normalizeGithubCommit defaults message to an empty string when absent', () => {
+  const ctx = loadBackend();
+  const normalized = ctx.normalizeGithubCommit({
+    sha: 's1',
+    commit: { author: { name: 'Ann Dev', date: '2026-07-10T10:00:00Z' } },
+    author: null
+  });
+  assert.equal(normalized.message, '');
 });
 
 test('normalizeGithubCommit falls back to email then name when login is missing', () => {
@@ -346,8 +356,12 @@ function createMockUrlFetchApp(pagesByRepo) {
   };
 }
 
-function githubCommit(sha, iso, login) {
-  return { sha: sha, commit: { author: { date: iso, name: login, email: login + '@x.com' } }, author: { login: login } };
+function githubCommit(sha, iso, login, message) {
+  return {
+    sha: sha,
+    commit: { author: { date: iso, name: login, email: login + '@x.com' }, message: message || (sha + ' work') },
+    author: { login: login }
+  };
 }
 
 test('doGet rejects a missing or wrong dashboard secret', () => {
@@ -397,6 +411,8 @@ test('doGet returns per-team stats sorted by total commits descending', () => {
   assert.equal(result._json.teams[0].totalCommits, 3);
   assert.equal(result._json.teams[0].postRelease, 2);
   assert.equal(result._json.teams[0].contributorCount, 2);
+  assert.equal(result._json.teams[0].commits.length, 3);
+  assert.equal(result._json.teams[0].commits[0].message, 'd1 work');
   assert.equal(result._json.teams[1].team, 'Icarus');
   assert.equal(result._json.teams[1].totalCommits, 2);
 });

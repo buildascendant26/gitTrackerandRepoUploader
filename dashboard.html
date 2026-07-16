@@ -80,11 +80,43 @@
   a { color: var(--ctf); }
   #status { margin-bottom: 12px; font-size: 13px; min-height: 18px; }
   #status.error { color: var(--danger); }
+  #auto-note { color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); margin-bottom: 12px; }
+  #auto-note .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ctf); margin-right: 6px; vertical-align: middle; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* clickable team name -> expandable commit detail */
+  td.team-cell { cursor: pointer; user-select: none; }
+  td.team-cell .team-name { color: var(--ctf); border-bottom: 1px dotted rgba(var(--ctf-rgb), 0.5); }
+  td.team-cell .caret { display: inline-block; width: 10px; color: var(--text-muted); transition: transform 0.15s; margin-right: 4px; }
+  tr.expanded td.team-cell .caret { transform: rotate(90deg); }
+  tr.detail-row > td { background: #070707; padding: 0 12px 14px 36px; }
+  .commit-list { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .commit-list th, .commit-list td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 7px 10px; }
+  .commit-list th { font-size: 10px; }
+  .commit-msg { font-family: var(--font-mono); color: var(--text-primary); }
+  .commit-sha { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+  .commit-empty { color: var(--text-muted); font-style: italic; padding: 10px; }
+
+  /* toast notifications */
+  #toast-wrap { position: fixed; top: 20px; right: 20px; z-index: 50; display: flex; flex-direction: column; gap: 10px; max-width: 340px; }
+  .toast {
+    background: var(--bg-panel); border: 1px solid var(--ctf); border-left: 3px solid var(--ctf);
+    border-radius: var(--radius); padding: 12px 14px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    animation: toastIn 0.25s ease; cursor: pointer;
+  }
+  .toast.kind-repo { border-color: #ffb020; border-left-color: #ffb020; }
+  .toast .toast-title { font-family: var(--font-mono); font-weight: 700; margin-bottom: 3px; }
+  .toast.kind-repo .toast-title { color: #ffb020; }
+  .toast.kind-commit .toast-title { color: var(--ctf); }
+  .toast .toast-body { color: var(--text-muted); font-size: 12px; }
+  .toast .toast-time { color: var(--text-muted); font-size: 10px; margin-top: 5px; font-family: var(--font-mono); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
 <canvas id="matrix" class="matrix-canvas" aria-hidden="true"></canvas>
 <div class="bg-vignette" aria-hidden="true"></div>
+<div id="toast-wrap" aria-live="polite"></div>
 <div id="gate">
   <h1>REPO TRACKER</h1>
   <p class="meta">Enter the dashboard secret to continue.</p>
@@ -98,6 +130,7 @@
   <p class="meta" id="release-meta"></p>
   <button id="refresh-btn">↻ REFRESH</button>
   <button id="release-btn">⚑ RELEASE PROBLEM STATEMENT</button>
+  <div id="auto-note"><span class="live-dot"></span>Live — auto-refreshes every 60s. Click a team name to see its commits.</div>
   <div id="status"></div>
   <table>
     <thead>
@@ -116,7 +149,7 @@
 </div>
 
 <script>
-  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbwDK_HIYm6iV_-LFxZYSCaIj-Kcl-IJJ7Mai1oyRRWj3pDs4mhVuNSiTukgBHPVNa-w/exec';
+  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbyVGTtaReZcoPd8qbTa8aHtEPPMbHVZtNS7QIgAGH_pBvq0gynDr9hWdy5ejMDvTVUs/exec';
   var secret = sessionStorage.getItem('repoTrackerSecret') || '';
 
   var gateEl = document.getElementById('gate');
@@ -124,11 +157,103 @@
   var statusEl = document.getElementById('status');
   var tableBody = document.getElementById('table-body');
   var releaseMetaEl = document.getElementById('release-meta');
+  var toastWrap = document.getElementById('toast-wrap');
+
+  var currentTeams = [];          // latest teams payload, for rendering commit detail on demand
+  var releaseTs = null;           // release timestamp (ms) or null
+  var expanded = {};              // team name -> true when its commit list is open
+  var autoTimer = null;           // setInterval handle for live refresh
+
+  // Per-team commit counts seen on the previous poll, persisted so a page
+  // reload doesn't re-announce everything. null = never seen -> seed silently.
+  var SNAP_KEY = 'repoTrackerSnapshot';
+  function loadSnapshot() {
+    try { return JSON.parse(localStorage.getItem(SNAP_KEY)) || null; }
+    catch (e) { return null; }
+  }
+  function saveSnapshot(snap) {
+    try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch (e) {}
+  }
 
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str == null ? '' : String(str);
     return div.innerHTML;
+  }
+
+  function showToast(kind, title, body) {
+    var el = document.createElement('div');
+    el.className = 'toast kind-' + kind;
+    el.innerHTML =
+      '<div class="toast-title">' + escapeHtml(title) + '</div>' +
+      '<div class="toast-body">' + escapeHtml(body) + '</div>' +
+      '<div class="toast-time">' + new Date().toLocaleTimeString() + '</div>';
+    el.addEventListener('click', function () { el.remove(); });
+    toastWrap.appendChild(el);
+    setTimeout(function () { el.remove(); }, 12000);
+
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification(title, { body: body }); } catch (e) {}
+    }
+  }
+
+  // Compare this poll against the last snapshot and toast anything new.
+  function notifyChanges(teams) {
+    var prev = loadSnapshot();
+    var next = {};
+    teams.forEach(function (t) {
+      next[t.team] = (t.status === 'ok') ? t.totalCommits : -1;
+    });
+
+    if (prev !== null) {
+      teams.forEach(function (t) {
+        var cur = next[t.team];
+        if (!(t.team in prev)) {
+          showToast('repo', 'New repo submitted', t.team + ' just joined the tracker.');
+        } else if (typeof prev[t.team] === 'number' && cur > prev[t.team] && prev[t.team] >= 0) {
+          var delta = cur - prev[t.team];
+          showToast('commit', delta + ' new commit' + (delta === 1 ? '' : 's'), t.team + ' — now ' + cur + ' total.');
+        }
+      });
+    }
+    saveSnapshot(next);
+  }
+
+  function teamNameCell(t, clickable) {
+    if (!clickable) return '<td>' + escapeHtml(t.team) + '</td>';
+    return '<td class="team-cell" data-team="' + escapeHtml(t.team) + '">' +
+      '<span class="caret">▸</span>' + // CSS rotates it when the row is expanded
+      '<span class="team-name">' + escapeHtml(t.team) + '</span></td>';
+  }
+
+  function buildDetailRow(t) {
+    var tr = document.createElement('tr');
+    tr.className = 'detail-row';
+    var commits = t.commits || [];
+    var inner;
+    if (!commits.length) {
+      inner = '<div class="commit-empty">No commits fetched for this repo.</div>';
+    } else {
+      var rows = commits.map(function (c) {
+        var firstLine = (c.message || '').split('\n')[0] || '(no message)';
+        var isPost = releaseTs !== null && new Date(c.date).getTime() >= releaseTs;
+        var chip = releaseTs === null ? '' :
+          '<span class="chip ' + (isPost ? 'chip-post' : 'chip-pre') + '">' + (isPost ? 'after' : 'before') + '</span>';
+        return '<tr>' +
+          '<td class="commit-sha">' + escapeHtml((c.sha || '').slice(0, 7)) + '</td>' +
+          '<td class="commit-msg" title="' + escapeHtml(c.message || '') + '">' + escapeHtml(firstLine) + '</td>' +
+          '<td>' + escapeHtml(c.author) + '</td>' +
+          '<td>' + (c.date ? new Date(c.date).toLocaleString() : '—') + '</td>' +
+          '<td>' + chip + '</td>' +
+          '</tr>';
+      }).join('');
+      inner =
+        '<table class="commit-list"><thead><tr>' +
+        '<th>SHA</th><th>Commit message</th><th>Author</th><th>When</th><th>Phase</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    tr.innerHTML = '<td colspan="7">' + inner + '</td>';
+    return tr;
   }
 
   function renderTeams(teams) {
@@ -137,14 +262,16 @@
       var tr = document.createElement('tr');
       if (t.status === 'error') {
         tr.innerHTML =
-          '<td>' + escapeHtml(t.team) + '</td>' +
+          teamNameCell(t, false) +
           '<td>' + escapeHtml(t.members) + '</td>' +
           '<td><a href="' + escapeHtml(t.repoUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t.repoUrl) + '</a></td>' +
           '<td class="row-error" colspan="4">' + escapeHtml(t.message) + '</td>';
+        tableBody.appendChild(tr);
       } else {
         if (t.postRelease === 0) tr.className = 'flagged';
+        if (expanded[t.team]) tr.className += ' expanded';
         tr.innerHTML =
-          '<td>' + escapeHtml(t.team) + '</td>' +
+          teamNameCell(t, true) +
           '<td>' + escapeHtml(t.members) + '</td>' +
           '<td><a href="' + escapeHtml(t.repoUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t.repoUrl) + '</a></td>' +
           '<td>' + t.totalCommits + '</td>' +
@@ -152,14 +279,22 @@
             '<span class="chip ' + (t.postRelease === 0 ? 'chip-flag' : 'chip-post') + '">' + t.postRelease + ' after</span></td>' +
           '<td>' + t.contributorCount + '</td>' +
           '<td>' + (t.lastCommitTime ? new Date(t.lastCommitTime).toLocaleString() : '—') + '</td>';
+        tableBody.appendChild(tr);
+        if (expanded[t.team]) tableBody.appendChild(buildDetailRow(t));
       }
-      tableBody.appendChild(tr);
     });
   }
 
-  function loadDashboard() {
-    statusEl.textContent = 'Loading...';
-    statusEl.className = '';
+  tableBody.addEventListener('click', function (evt) {
+    var cell = evt.target.closest ? evt.target.closest('td.team-cell') : null;
+    if (!cell) return;
+    var name = cell.getAttribute('data-team');
+    expanded[name] = !expanded[name];
+    renderTeams(currentTeams);
+  });
+
+  function loadDashboard(silent) {
+    if (!silent) { statusEl.textContent = 'Loading...'; statusEl.className = ''; }
     var url = ENDPOINT + '?action=dashboard&secret=' + encodeURIComponent(secret);
     fetch(url)
       .then(function (res) { return res.json(); })
@@ -170,23 +305,38 @@
           return;
         }
         statusEl.textContent = '';
+        releaseTs = data.releaseTimestamp ? new Date(data.releaseTimestamp).getTime() : null;
         releaseMetaEl.textContent = data.releaseTimestamp
           ? 'Problem statement released: ' + new Date(data.releaseTimestamp).toLocaleString()
           : 'Problem statement not yet released — every commit currently counts as "before".';
+        currentTeams = data.teams;
+        notifyChanges(data.teams);
         renderTeams(data.teams);
       })
       .catch(function () {
-        statusEl.textContent = 'Network error — try again.';
-        statusEl.className = 'error';
+        if (!silent) { statusEl.textContent = 'Network error — try again.'; statusEl.className = 'error'; }
       });
+  }
+
+  function startAutoRefresh() {
+    if (autoTimer) return;
+    autoTimer = setInterval(function () { loadDashboard(true); }, 60000);
+  }
+
+  function enterBoard() {
+    gateEl.style.display = 'none';
+    boardEl.style.display = 'block';
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch (e) {}
+    }
+    loadDashboard();
+    startAutoRefresh();
   }
 
   document.getElementById('unlock-btn').addEventListener('click', function () {
     secret = document.getElementById('secret-input').value;
     sessionStorage.setItem('repoTrackerSecret', secret);
-    gateEl.style.display = 'none';
-    boardEl.style.display = 'block';
-    loadDashboard();
+    enterBoard();
   });
 
   document.getElementById('refresh-btn').addEventListener('click', loadDashboard);
@@ -223,9 +373,7 @@
   });
 
   if (secret) {
-    gateEl.style.display = 'none';
-    boardEl.style.display = 'block';
-    loadDashboard();
+    enterBoard();
   }
 </script>
 <script src="matrix-bg.js"></script>

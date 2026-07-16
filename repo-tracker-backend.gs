@@ -52,7 +52,8 @@ function normalizeGithubCommit(apiCommit) {
   return {
     sha: apiCommit.sha,
     date: authorInfo.date,
-    author: login || authorInfo.email || authorInfo.name || 'unknown'
+    author: login || authorInfo.email || authorInfo.name || 'unknown',
+    message: commitInfo.message || ''
   };
 }
 
@@ -216,7 +217,9 @@ function doGet(e) {
     try {
       var commits = fetchAllCommits(parsed.owner, parsed.repo, token).map(normalizeGithubCommit);
       var stats = buildTeamStats(commits, releaseIso);
-      return Object.assign({ team: team, members: members, repoUrl: repoUrl, status: 'ok' }, stats);
+      // commits arrive newest-first from GitHub; ship them so the dashboard can
+      // list per-commit detail when an admin expands a team.
+      return Object.assign({ team: team, members: members, repoUrl: repoUrl, status: 'ok', commits: commits }, stats);
     } catch (err) {
       return { team: team, members: members, repoUrl: repoUrl, status: 'error', message: err.message };
     }
